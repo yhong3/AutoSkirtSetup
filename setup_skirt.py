@@ -53,6 +53,7 @@ class Dskjal_PT_SetupSkirtUI(bpy.types.Panel):
 
     def draw(self, context):
         self.layout.operator("dskjal.setupskirtbutton")
+        self.layout.operator("test.setuphemlinebutton")
 
 class Dskjal_OT_SetupSkirtButton(bpy.types.Operator):
     bl_idname = "dskjal.setupskirtbutton"
@@ -72,7 +73,7 @@ class Dskjal_OT_SetupSkirtButton(bpy.types.Operator):
         #assign vertex groups
         vgNameHeader = "skirt_t."
         for v in bm.verts:
-            vg = ob.vertex_groups.new(vgNameHeader + "%03d" % v.index)
+            vg = ob.vertex_groups.new(name = vgNameHeader + "%03d" % v.index)
             vg.add([v.index], 1, 'REPLACE')
 
         #get armature
@@ -143,7 +144,100 @@ class Dskjal_OT_SetupSkirtButton(bpy.types.Operator):
         return{'FINISHED'}
 
 
-classes = (Dskjal_OT_SetupSkirtButton, Dskjal_PT_SetupSkirtUI)	
+class Test_OT_SetupHemlineButton(bpy.types.Operator):
+    bl_idname = "test.setuphemlinebutton"
+    bl_label = "Setup hemline bones"
+  
+    def execute(self, context):
+        # [vertex.select for vertex in bpy.context.selected_objects[0].data.vertices]
+        ob = bpy.context.active_object
+
+        
+        #get bmesh
+        bpy.ops.object.mode_set(mode='OBJECT')
+        if ob.data.is_editmode:
+            bm = bmesh.from_edit_mesh(ob.data)
+        else:
+            bm = bmesh.new()
+            bm.from_mesh(ob.data)
+
+        selectedVerts = [v for v in bm.verts if v.select]
+        
+        #assign vertex groups
+        vgNameHeader = "skirt_t."
+        for v in selectedVerts:
+            vg = ob.vertex_groups.new(name = vgNameHeader + "%03d" % v.index)
+            vg.add([v.index], 1, 'REPLACE')
+
+        #get armature
+        bpy.ops.object.add(type='ARMATURE', enter_editmode=True ,location=ob.location)
+        amt = bpy.context.object
+        amt.name = "AutoSetupedSkirt"
+
+        #-----------------------create bones----------------------------
+        bpy.ops.object.mode_set(mode='EDIT')
+
+        #get roop start
+        terminalVerts = [v for v in selectedVerts if len(v.link_edges)==3]
+        meanPos = mathutils.Vector((0.0,0.0,0.0))
+        weight = 1/len(terminalVerts)
+        for v in terminalVerts:
+            meanPos += v.co * weight
+        heads = [v for v in terminalVerts if v.co.z > meanPos.z]
+
+        tailIndexTable = [-1]*len(selectedVerts)
+        boneNameHeader = "skirt."
+
+        while len(heads) != 0:
+            tails = []
+            for v in heads:
+                b = amt.data.edit_bones.new(boneNameHeader + "%03d" % v.index)
+                b.head = v.co
+
+                #search tail
+                top = bottom = v.link_edges[0].other_vert(v)
+                for e in v.link_edges:
+                    other = e.other_vert(v)
+                    if bottom.co.z > other.co.z:
+                        bottom = other
+                    elif top.co.z < other.co.z:
+                        top = other
+
+                #append tail(i.e. next head)
+                b.tail = bottom.co
+                if len(bottom.link_edges) > 3:
+                    tails.append(bottom)
+
+                #create index
+                tailIndexTable[v.index] = bottom.index
+
+                #parenting
+                if len(v.link_edges) > 3:
+                    parentName = boneNameHeader + "%03d" % top.index
+                    b.parent = amt.data.edit_bones[parentName]
+                    b.use_connect = True
+
+            heads = tails
+
+
+        #add ik
+        bpy.ops.object.mode_set(mode='POSE')
+        for b in amt.pose.bones:
+            ik = b.constraints.new(type='IK')
+            ik.target = ob
+            ik.subtarget = vgNameHeader + "%03d" % tailIndexTable[int(b.name[-3:])]
+            ik.chain_count = 1
+            ik.use_stretch = 1
+
+            #enable stretch
+            b.ik_stretch = 1
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        return{'FINISHED'}
+
+
+classes = (Dskjal_OT_SetupSkirtButton, Dskjal_PT_SetupSkirtUI, Test_OT_SetupHemlineButton)	
 register, unregister = bpy.utils.register_classes_factory(classes)
 
 if __name__ == "__main__":
