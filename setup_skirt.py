@@ -22,8 +22,8 @@ import mathutils
 bl_info = {
     "name": "Setup skirt bone",
     "author": "dskjal",
-    "version": (1, 0),
-    "blender": (2, 78, 0),
+    "version": (1, 1),
+    "blender": (2, 80, 0),
     "location": "Properties Shelf",
     "description": "Setup skirt bones",
     "warning": "",
@@ -33,10 +33,15 @@ bl_info = {
     "category": "Rigging"
 }
 
-class DskjalSetupSkirtUI(bpy.types.Panel):
+class Dskjal_PT_SetupSkirtUI(bpy.types.Panel):
+    if bpy.app.version < (2,80,0):
+        Region = "TOOLS"
+    else:
+        Region = "UI"
+    
     bl_label = "Setup skirt bones"
     bl_space_type = "VIEW_3D"
-    bl_region_type = "TOOLS"
+    bl_region_type = Region
     bl_category = "Tools"
 
     @classmethod
@@ -49,7 +54,7 @@ class DskjalSetupSkirtUI(bpy.types.Panel):
     def draw(self, context):
         self.layout.operator("dskjal.setupskirtbutton")
 
-class DskjalSetupSkirtButton(bpy.types.Operator):
+class Dskjal_OT_SetupSkirtButton(bpy.types.Operator):
     bl_idname = "dskjal.setupskirtbutton"
     bl_label = "Setup skirt bones"
   
@@ -137,11 +142,9 @@ class DskjalSetupSkirtButton(bpy.types.Operator):
 
         return{'FINISHED'}
 
-def register():
-    bpy.utils.register_module(__name__)
 
-def unregister():
-    bpy.utils.unregister_module(__name__)
+classes = (Dskjal_OT_SetupSkirtButton, Dskjal_PT_SetupSkirtUI)	
+register, unregister = bpy.utils.register_classes_factory(classes)
 
 if __name__ == "__main__":
     register()
